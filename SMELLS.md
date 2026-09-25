@@ -7,45 +7,68 @@ and methods, not adjectives.
 
 ## Milestone 1: Three smells
 
-Three smells, each in a different part of the module. For each one, fill in all five parts.
+The cause labels below are inferred from the code, not verified generation history.
 
-### Smell 1
+### Smell 1: Duplication over reuse
 
-**The smell.** Name it, using the vocabulary from lecture.
+**The smell.** Duplication over reuse: booking creation and revenue reporting each
+implement the same pricing policy.
 
-**Classic or agent-specific.** Which, and why that label. For agent-specific, say which of
-the lecture's three causes produced it.
+**Classic or agent-specific.** Agent-specific. The likely cause is missing context:
+the reporting code reimplements pricing rather than reusing the existing rules.
 
-**Where in the code.** File and, where there is one, method.
+**Where in the code.** `src/reservationManager.ts`: `calculatePrice()` and
+`applyDiscounts()`; `src/reportGenerator.ts`: `priceOf()`. Both files also define
+their own surcharge, discount, and cutoff constants.
 
-**The principle it violates.** Name the principle. "This is too big" is not a principle.
+**The principle it violates.** DRY: one business policy has two independently
+maintained implementations, including the order of rounding.
 
-**What it makes expensive.** A concrete future change, or something that already goes wrong
-today. What breaks first?
+**What it makes expensive.** Changing the evening discount requires edits in both
+files. Updating only booking creation would make newly stored prices disagree with
+the prices recomputed by the revenue report.
 
-### Smell 2
+### Smell 2: Phantom complexity
 
-**The smell.**
+**The smell.** Phantom complexity: the booking query has a cache lookup, but its
+cache never receives any entries through the service's normal call paths.
 
-**Classic or agent-specific.**
+**Classic or agent-specific.** Agent-specific. Missing context is a plausible cause:
+the cache implementation was not connected to the complete read/write flow. Free
+volume can explain the surrounding TTL, capacity, and invalidation machinery.
 
-**Where in the code.**
+**Where in the code.** `src/reservationManager.ts`: the constructor creates a private
+`QueryCache`, and `listBookingsForRoom()` calls `get()` but never `set()`.
+`src/cache/queryCache.ts` and `src/cache/cacheConfig.ts` provide the unused machinery.
 
-**The principle it violates.**
+**The principle it violates.** Simplicity: additional state and control flow should
+serve an actual requirement. This integration adds complexity without avoiding any
+storage queries.
 
-**What it makes expensive.**
+**What it makes expensive.** A maintainer investigating query performance must trace
+the cache lifecycle to discover that every lookup misses. Enabling writes later also
+requires deciding how creation and cancellation invalidate cached booking lists.
 
-### Smell 3
+### Smell 3: Speculative over-abstraction
 
-**The smell.**
+**The smell.** Speculative over-abstraction: a dynamic notification registry wraps
+the service's single, fixed email channel.
 
-**Classic or agent-specific.**
+**Classic or agent-specific.** Agent-specific. The likely cause is an underspecified
+request: the implementation anticipates pluggable channels without a demonstrated
+need for dynamic registration in the current service.
 
-**Where in the code.**
+**Where in the code.** `src/notifications/notifierFactory.ts`: `ChannelName` permits
+only `'email'`, yet `builders`, `registerChannel()`, and `createNotificationChannel()`
+implement a mutable registry. `ReservationManager` always uses the default config.
 
-**The principle it violates.**
+**The principle it violates.** YAGNI: pay for extension mechanisms when a supported
+variation needs them. The concern is the dynamic registry, not the mere existence of
+the `NotificationChannel` interface.
 
-**What it makes expensive.**
+**What it makes expensive.** Understanding email construction requires following
+module-level registration and builder lookup. Replacing a builder for a test changes
+global state that must be restored to avoid affecting later manager instances.
 
 ---
 
