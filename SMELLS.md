@@ -113,26 +113,59 @@ every input.
 
 One proposal for each milestone 1 smell you did not fix.
 
-### Proposal A (not coded)
+### Proposal A: Remove the inactive cache layer (not coded)
 
-**The problem.** Name it.
+**The problem.** Smell 2, phantom complexity. `ReservationManager` constructs a
+private cache and reads it in `listBookingsForRoom()`, but no service path populates
+it. The cache suggests an optimization that never avoids a storage read.
 
-**The decomposition.** What are the pieces, what does each own, and where do the rules live?
+**The decomposition.** Keep `ReservationManager` responsible for booking operations
+and make `listBookingsForRoom()` delegate directly to `StorageProvider.findByRoom()`.
+Booking records remain in `InMemoryStorageProvider`'s `Map<string, Booking>`:
+creation still calls `save()`, cancellation still calls `update()`, and queries read
+that same storage. The provider retains responsibility for insertion order and
+copying records. Remove only the redundant cache layer: the manager's cache field,
+initialization, and lookup branch, plus the cache utilities after checking their
+exported APIs for consumers. Booking rules stay in the manager and validator;
+there is no cache invalidation policy to coordinate with them. Add caching only if
+a measured query cost justifies designing its read/write lifecycle.
 
-**One cost.** Something this actually costs. "No real downside" is not a cost.
+**One cost.** Removing the exported cache utilities requires a consumer audit and
+migration for any callers outside this repository. It also gives up that reusable
+TTL/eviction implementation if a later workload actually needs caching.
 
-### Proposal B (not coded)
+### Proposal B: Inject the notification channel (not coded)
 
-**The problem.**
+**The problem.** Smell 3, speculative over-abstraction. `notifierFactory.ts` uses a
+mutable global builder registry even though the service always selects email.
 
-**The decomposition.**
+**The decomposition.** Keep `NotificationChannel` as the sending boundary and
+`EmailChannel` responsible for email formatting and its sent-message record. Give
+`ReservationManager` an optional channel constructor argument, defaulting to an
+`EmailChannel`; callers can pass a configured channel or a test double explicitly.
+The caller selects and configures the channel when constructing a manager. The
+manager still decides when to notify and builds the receipt; the supplied channel
+handles sending. Remove the global builder registry and registration-based factory.
+Keep the interface because it supports substitution without shared registration
+state; do not introduce a new plugin-selection mechanism.
 
-**One cost.**
+**One cost.** Callers using `registerChannel()` would need to migrate to per-instance
+wiring. Changing a channel globally through registration would no longer work;
+callers needing that behavior would have to coordinate their manager construction.
 
 ### The thing that looks smelly but is fine
 
-**What it is.** File and method.
+**What it is.** `src/validation.ts`, `validateReservationRequest()`, can look like a
+long-method smell because it contains many conditional checks.
 
-**Why it is fine.** Defend it with properties of the code, not with its line count.
+**Why it is fine.** It performs one cohesive operation: validate one request against
+one room and return the first failure. It has no storage, notification, or mutation
+side effects. The checks form an explicit sequence: validate the input shape and
+time interval before applying duration, capacity, and building rules. Keeping that
+sequence together makes error precedence visible without a rule-dispatch framework.
 
-**What would flip your verdict.** Name the change that would turn this into a real problem.
+**What would flip your verdict.** Supporting several buildings with different
+opening hours, time boundaries, and premium-room policies would make interleaved
+building-specific branches harder to change independently. At that point, separate
+common request checks from a selected building policy, while preserving explicit
+error precedence.

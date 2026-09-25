@@ -29,10 +29,14 @@ and `npm test`, once you enable workflows on your fork from the Actions tab.
 ## Where things are
 
 - Source: `src/`
-  - `reservationManager.ts`, `reportGenerator.ts`, `availability.ts`, `validation.ts`, `types.ts`
+  - `reservationManager.ts`, `reportGenerator.ts`, `pricing.ts`, `availability.ts`, `validation.ts`, `types.ts`
   - `src/notifications/`, `src/storage/`, `src/cache/`
 - Tests: `tests/`
 - Your writeup: `SMELLS.md`
 - Setup: `SETUP.md`
 
 See the Lab 5 handout on the course page for the three milestones you show a TA.
+
+## Tools and models used
+
+Tool: OpenAI Codex; model: GPT-6. Used for code review, the pricing refactor, verification, and drafting `SMELLS.md`.
