@@ -7,7 +7,8 @@ and methods, not adjectives.
 
 ## Milestone 1: Three smells
 
-The cause labels below are inferred from the code, not verified generation history.
+These findings describe the code before the Milestone 2 fix. The cause labels below
+are inferred from the code, not verified generation history.
 
 ### Smell 1: Duplication over reuse
 
@@ -76,15 +77,35 @@ global state that must be restored to avoid affecting later manager instances.
 
 One fix, behavior preserved, suite green, zero test edits.
 
-**Which smell you attacked.** And why that one.
+**Which smell you attacked.** Smell 1, duplication over reuse. The duplicated pricing
+policy has a clear boundary and can be centralized through a small,
+behavior-preserving change. This removes two independently maintained
+implementations without a broader redesign of booking, reporting, or storage.
 
-**What changed.** Files and methods you touched, and what the code does differently now.
+**What changed.** Added `src/pricing.ts` with one pure `calculatePrice(room, start,
+end)` function owning the pricing constants and calculation. In
+`src/reservationManager.ts`, the existing public `calculatePrice()` delegates to it;
+the private `applyDiscounts()` and duplicate constants were removed. In
+`src/reportGenerator.ts`, `revenue()` calls the same function; the private `priceOf()`,
+its `durationOf()` helper, and duplicate constants were removed. Both callers now
+use one policy implementation.
 
-**What you deliberately did not touch.** Name the scope line you drew and why you drew it
-there. "I ran out of time" is not a scope line.
+**What you deliberately did not touch.** The scope is pricing-policy extraction.
+The thresholds, adjustment order, and rounding after each step stay unchanged, as
+do existing public method signatures. Revenue still recomputes prices from room
+rates rather than summing stored `priceCents`; changing that would change reporting
+semantics. Validation, overlap rules, storage, notification, and caching remain
+unchanged. The other two smells are reserved for Milestone 3 proposals. No tests
+were edited.
 
-**How you know behavior is preserved.** Point at the suite, say what it actually covers, and
-say what it would not catch.
+**How you know behavior is preserved.** Before and after the refactor, `npm test`
+passed all 39 tests across three files, and `npm run typecheck` passed. The suite
+checks plain pricing, the premium surcharge, long-booking and evening discounts,
+revenue totals and cancellation filtering, plus booking, validation, availability,
+and occupancy behavior. It does not exhaustively cover combinations of discounts
+or rounding-sensitive rates. Inspection of the extraction confirms the same
+arithmetic order and `Math.round` steps; the green suite alone is not a proof for
+every input.
 
 ---
 
